@@ -87,11 +87,12 @@ ISP.prototype.programFuses = function (next) {
 }
 
 // returns position of page read
-ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize, page, next) {
+ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
   var firstline = true;
   var len;
   var page_idx = 0;
   var beginning = hexText;
+  var page = [];
 
   var hexByte, checksum;
 
@@ -174,7 +175,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize, pag
 
   console.log("Total bytes read:", page_idx);
 
-  return hexText;
+  return {"position": hexPos, "page": page};
 }
 
 ISP.prototype.flashWord = function(hilo, addr, data, next) {
