@@ -88,7 +88,6 @@ ISP.prototype.programFuses = function (next) {
 
 // returns position of page read
 ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
-  var firstline = true;
   var len;
   var page_idx = 0;
   var beginning = hexText;
@@ -97,30 +96,33 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
   var hexByte, checksum;
 
   function nextHex(){
-    hexByte = parseInt(hextText[++hexPos], 'hex');
-    hexByte = (hexByte << 4) + parseInt(hextText[++hexPos], 'hex');
+    hexByte = hexToN(hexText[++hexPos]);
+    hexByte = (hexByte << 4) + hexToN(hexText[++hexPos]);
     checksum += hexByte;
   }
 
-  // empty the page by filling it with 0xFFs
+  // initiate the page by filling it with 0xFFs
   for (var i = 0; i<pageSize; i++){
     page[i] = 0xFF;
   }
 
   while (1) {
     var lineAddr;
-    if ( hexText[++hexPos] != ':') {
+    if ( hexText[++hexPos] != 0x3a) {
       if (debug) console.log("no colon, stopping image read");
       return;
     }
 
-    len = parseInt(hextText[++hexPos], 'hex');
-    len = (len << 4) + parseInt(hextText[++hexPos], 'hex');
+    len = hexToN(hexText[++hexPos]);
+    len = (len << 4) + hexToN(hexText[++hexPos]);
     checksum = len;
+    debug && console.log('Len',len);
 
+    // High address byte
     nextHex();
-    lineAddr = b;
+    lineAddr = hexByte;
 
+    // Low address byte
     nextHex();
     lineAddr = (lineAddr << 8) + hexByte;
 
@@ -130,21 +132,22 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
     }
 
     nextHex();
+    // Check record type
     if (hexByte == 0x1) {
       console.log("hex byte = 0x1");
       break;
     }
 
     if (debug) {
-      console.log("line address = 0x", parseInt(lineAddr, 'hex'));
-      console.log("page address = 0x", parseInt(pageAddr, 'hex'));
+      console.log("line address = 0x", lineAddr);
+      console.log("page address = 0x", pageAddr);
     }
 
     for (var i = 0; i<len; i++){
       nextHex();
 
       if (debug) {
-        process.stdout.write(parseInt(hexByte)+' ');
+        console.log(hexByte+' ');
       }
 
       page[page_idx] = hexByte;
@@ -156,12 +159,12 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
       }
     }
 
-    hexByte();
-    if (checksum != 0){
-      console.log("Error: bad checksum. Got", parseInt(checksum, 'hex'));
+    nextHex();
+    if (checksum%256 != 0){
+      console.log("Error: bad checksum. Got", checksum);
     }
 
-    if (hextText[++hexPos] != '\n') {
+    if (hexText[++hexPos] != 0x0a) {
       console.log("Error: no end of line");
       break;
     }
@@ -247,8 +250,8 @@ ISP.prototype.verifyImage = function (hexText, next) {
   var len, hexByte, checksum;
 
   function nextHex(){
-    hexByte = parseInt(hextText[++hexPos], 'hex');
-    hexByte = (hexByte << 4) + parseInt(hextText[++hexPos], 'hex');
+    hexByte = hexToN(hexText[++hexPos]);
+    hexByte = (hexByte << 4) + hexToN(hexText[++hexPos]);
     checksum += hexByte;
   }
 
@@ -257,14 +260,14 @@ ISP.prototype.verifyImage = function (hexText, next) {
   function check(err, next) {
     if (err) return console.log("Check error", err);
 
-    if (hexText[++hexPos] != ':') {
+    if (hexText[++hexPos] != 0x3a) {
       var error = "Error: No colon";
       console.log(error);
       next("No colon");
     }
 
-    len = parseInt(hextText[++hexPos], 'hex');
-    len = (len<<4) + parseInt(hextText[++hexPos], 'hex');
+    len = hexToN(hexText[++hexPos]);
+    len = (len<<4) + hexToN(hexText[++hexPos]);
     checksum = len;
 
     nextHex();
@@ -326,7 +329,7 @@ ISP.prototype.verifyImage = function (hexText, next) {
         return check('bad checksum');
       }
 
-      if (hextText[++hexPos] != '\n'){
+      if (hexText[++hexPos] != '\n'){
         console.log("no end of line");
         return check('no end of line');
       }
@@ -361,6 +364,15 @@ ISP.prototype._transfer = function (arr, next){
   this.spi.transfer(new Buffer(arr), function(err, res){
     next(null, 0xFFFFFF & ((res[1]<<16)+(res[2]<<8) + res[3]));
   });
+}
+
+function hexToN(hex) {
+  if (hex >= 0x30 && hex <= 0x39) {
+    return hex - 0x30;
+  }
+  if (hex >= 0x41 && hex <= 0x46){
+    return (hex - 0x41) + 10;
+  }
 }
 
 function use (hardware, options) {
