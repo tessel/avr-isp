@@ -14,5 +14,8 @@
     "tessel",
     "avr",
     "isp"
-  ]
+  ],
+  "dependencies": {
+    "sync-queue": "0.0.1"
+  }
 }
