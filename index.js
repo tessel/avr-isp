@@ -1,7 +1,7 @@
 var tessel = require('tessel');
 var Queue = require('sync-queue');
 
-// #define CLOCKSPEED_FUSES   SPI_CLOCK_DIV128 
+// #define CLOCKSPEED_FUSES   SPI_CLOCK_DIV128
 // #define CLOCKSPEED_FLASH   SPI_CLOCK_DIV8
 
 var CLOCKSPEED_FUSES = 125000 // Arduino's SPI_CLOCK_DIV128, 125Khz
@@ -18,8 +18,8 @@ ISP = function(hardware, options){
     {clockSpeed:CLOCKSPEED_FUSES, mode:0
       , chipSelect:this.chipSelect});
 
-  this.success = hardware.led[0];
-  this.failure = hardware.led[1];
+  this.success = tessel.led[0];
+  this.failure = tessel.led[1];
 
   this.clockSpeed = CLOCKSPEED_FUSES;
 }
@@ -128,7 +128,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
       console.log('line address bigger than pages');
       return beginning;
     }
-    
+
     nextHex();
     if (hexByte == 0x1) {
       console.log("hex byte = 0x1");
@@ -221,10 +221,10 @@ ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize) {
           next(err);
         });
       });
-    
+
     });
   }
-  
+
   execute(funcArry, null, function (){
     pageAddr = pageAddr/2 & 0xFFFF;
 
@@ -236,7 +236,7 @@ ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize) {
         return next(true);
       });
     });
-  }); 
+  });
 }
 
 ISP.prototype.verifyImage = function (hexText, next) {
@@ -256,7 +256,7 @@ ISP.prototype.verifyImage = function (hexText, next) {
 
   function check(err, next) {
     if (err) return console.log("Check error", err);
-    
+
     if (hexText[++hexPos] != ':') {
       var error = "Error: No colon";
       console.log(error);
@@ -359,7 +359,13 @@ ISP.prototype._transfer = function (arr, next){
   }
 
   this.spi.transfer(new Buffer(arr), function(err, res){
-    next(null, 0xFFFFFF & ((res[1]<<16)+(res[2]<<8) + res[3]);
+    next(null, 0xFFFFFF & ((res[1]<<16)+(res[2]<<8) + res[3]));
   });
 }
 
+function use (hardware, options) {
+  return new ISP(hardware, options);
+}
+
+module.exports.ISP = ISP;
+module.exports.use = use;
