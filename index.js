@@ -19,7 +19,7 @@ ISP = function(hardware, options){
       , chipSelect:this.chipSelect});
 
   this.success = tessel.led[0];
-  this.failure = tessel.led[1];
+  this.programming = tessel.led[1];
 
   this.clockSpeed = CLOCKSPEED_FUSES;
 }
@@ -42,13 +42,15 @@ ISP.prototype.readSignature = function(next){
 
   self._transfer([0x30, 0x00, 0x00, 0x00], function(err, res){
     self._transfer([0x30, 0x00, 0x01, 0x00], function(err, res){
-      console.log("signature 1", res);
+      if (debug)
+        console.log("signature 1", res[3]);
 
-      signature = res << 8;
+      signature = res[3] << 8;
 
       self._transfer([0x30, 0x00, 0x02, 0x00], function(err, res){
-        console.log("signature 1", res);
-        signature = signature | res;
+        if (debug)
+          console.log("signature 2", res[3]);
+        signature = signature | res[3];
 
         if (debug)
           console.log("got signature", signature);
@@ -65,25 +67,88 @@ ISP.prototype.readSignature = function(next){
 
 ISP.prototype.verifyFuses = function (fuses, mask, next) {
   // verifies only the low fuse for now
-  this._clockChange(CLOCKSPEED_FUSES);
+  var self = this;
+  self._clockChange(CLOCKSPEED_FUSES);
+  var queue = new Queue();
 
-  this._transfer([0x50, 0x00, 0x00, 0x00], function(err, res){
-
-    res = res & fusemask[low];
-    if (!res) return next(false);
-    next(true);
+  queue.place(function verifyLock(){
+    self._transfer([0x58, 0x00, 0x00, 0x00], function(err, res){
+      if (res[3] & mask.lock) {
+        queue.next();
+      } else {
+        return next(new Error('Could not verify lock fuse'));
+      }
+    });
   });
+
+  queue.place(function verifyLow(){
+    self._transfer([0x50, 0x00, 0x00, 0x00], function(err, res){
+      if (res[3] & mask.low) {
+        queue.next();
+      } else {
+        return next(new Error('Could not verify low fuse'));
+      }
+    });
+  });
+
+  queue.place(function verifyHigh(){
+    self._transfer([0x58, 0x08, 0x00, 0x00], function(err, res){
+      if (res[3] & mask.high) {
+        queue.next();
+      } else {
+        return next(new Error('Could not verify high fuse'));
+      }
+    });
+  });
+
+  queue.place(function verifyExt(){
+    self._transfer([0x50, 0x08, 0x00, 0x00], function(err, res){
+      if (res[3] & mask.ext) {
+        return next();
+      } else {
+        return next(new Error('Could not verify ext fuse'));
+      }
+    });
+  });
+
 }
 
 ISP.prototype.programFuses = function (next) {
   var self = this;
   // write only the low fuse for now
   self._clockChange(CLOCKSPEED_FUSES);
-  self._transfer([0xAC, 0xA0, 0x00, fuses.low], function(err, res){
-    self.verifyFuses(FUSES, MASK, function(err){
-      next(err);
+  var queue = new Queue();
+
+  queue.place(function programLock(){
+    self._transfer([0xAC, 0xE0, 0x00, FUSES.lock], function(err, res){
+      queue.next();
     });
   });
+
+  queue.place(function programLow(){
+    self._transfer([0xAC, 0xA0, 0x00, FUSES.low], function(err, res){
+      queue.next();
+    });
+  });
+
+  queue.place(function programHigh(){
+    self._transfer([0xAC, 0xA8, 0x00, FUSES.high], function(err, res){
+      queue.next();
+    });
+  });
+
+  queue.place(function programExt(){
+    self._transfer([0xAC, 0xA4, 0x00, FUSES.ext], function(err, res){
+      self.verifyFuses(FUSES, MASK, function(err){
+        if (err){
+          next(err);
+        }else{
+          next();
+        }
+      });
+    });
+  });
+
 }
 
 // returns position of page read
@@ -204,7 +269,7 @@ function execute(funcArray, err, next) {
 // polls chip until it is no longer busy
 ISP.prototype._busyWait = function(next){
   var self = this;
-  this.spi.transfer(new Buffer[0xF0, 0x00, 0x00, 0x00], function (err, res){
+  this.spi.transfer(new Buffer([0xF0, 0x00, 0x00, 0x00]), function (err, res){
 
     if (res & 0x01) return self._busyWait(next);
     else return next();
@@ -342,6 +407,19 @@ ISP.prototype.verifyImage = function (hexText, next) {
   });
 }
 
+ISP.prototype.startProgramming = function (next) {
+  this.reset.output(0);
+  this.programming.write(1);
+  this.spi.transfer(new Buffer([0xAC, 0x53, 0x00, 0x00]), function(err, rec){
+    console.log("SPI response", rec);
+    if (rec && rec[2] == 0x53){
+      next()
+    } else {
+      next(new Error('Programming confirmation not received.'));
+    }
+  });
+}
+
 ISP.prototype.eraseChip = function(next){
   var self = this;
   self._clockChange(CLOCKSPEED_FUSES);
@@ -362,7 +440,7 @@ ISP.prototype._transfer = function (arr, next){
   }
 
   this.spi.transfer(new Buffer(arr), function(err, res){
-    next(null, 0xFFFFFF & ((res[1]<<16)+(res[2]<<8) + res[3]));
+    next(null, res);// 0xFFFFFF & ((res[1]<<16)+(res[2]<<8) + res[3]));
   });
 }
 
@@ -380,4 +458,6 @@ function use (hardware, options) {
 }
 
 module.exports.ISP = ISP;
+module.exports.FUSES = FUSES;
+module.exports.MASK = MASK;
 module.exports.use = use;
