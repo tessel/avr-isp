@@ -174,6 +174,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
   while (1) {
     var lineAddr;
     if ( hexText[++hexPos] != 0x3a) {
+      console.log('dump', hexPos, hexText[hexPos-2],hexText[hexPos-1],hexText[hexPos],hexText[hexPos+1]);
       if (debug) console.log("no colon, stopping image read");
       return;
     }
@@ -192,7 +193,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
     lineAddr = (lineAddr << 8) + hexByte;
 
     if (lineAddr >= (pageAddr + pageSize)){
-      console.log('line address bigger than pages');
+      console.log('line address bigger than pages', lineAddr);
       return beginning;
     }
 
@@ -200,6 +201,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
     // Check record type
     if (hexByte == 0x1) {
       console.log("hex byte = 0x1");
+      hexPos=hexText.length;
       break;
     }
 
@@ -229,9 +231,17 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
       console.log("Error: bad checksum. Got", checksum);
     }
 
-    if (hexText[++hexPos] != 0x0a) {
-      console.log("Error: no end of line");
-      break;
+    hexPos++;
+    if (hexText[hexPos] != 0x0d) {
+      if (hexText[hexPos] != 0x0a){
+        console.log("Error: no end of line");
+        break;
+      }
+    } else {
+      if (hexText[++hexPos] != 0x0a){
+        console.log("Error: no end of line");
+        break;
+      }
     }
 
     if (debug)
@@ -418,6 +428,10 @@ ISP.prototype.startProgramming = function (next) {
       next(new Error('Programming confirmation not received.'));
     }
   });
+}
+
+ISP.prototype.endProgramming = function (next) {
+  this.reset.output(0);
 }
 
 ISP.prototype.eraseChip = function(next){
