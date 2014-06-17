@@ -8,8 +8,10 @@ var CLOCKSPEED_FUSES = 125000 // Arduino's SPI_CLOCK_DIV128, 125Khz
   , CLOCKSPEED_FLASH = 2000000 // SPI_CLOCK_DIV8, 2Mhz
   , FUSES = {"lock": 0xFF, "low": 0xE2, "high": 0xDF, "ext": 0xFF}  // pre program fuses (prot/lock, low, high, ext)
   , MASK = {"lock": 0xFF, "low": 0xFF, "high": 0xFF, "ext": 0xFF}
+  , HIGH = 0x01
+  , LOW = 0x00
   ;
-var debug = true;
+var debug = false;
 
 ISP = function(hardware, options){
   this.chipSelect = hardware.digital[0];
@@ -28,7 +30,7 @@ ISP.prototype._clockChange = function (speed) {
   if (this.clockSpeed == speed) return;
 
   this.clockSpeed = speed;
-  this.spi.clockSpeed(speed);
+  this.spi.setClockSpeed(speed);
 }
 
 // reads bottom 2 signature bytes and returns it
@@ -200,7 +202,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
     nextHex();
     // Check record type
     if (hexByte == 0x1) {
-      console.log("hex byte = 0x1");
+      debug && console.log("EOF record: 0x1");
       hexPos=hexText.length;
       break;
     }
@@ -251,25 +253,82 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
       break;
   }
 
-  console.log("Total bytes read:", page_idx);
+  debug && console.log("Total bytes read:", page_idx);
 
-  return {"position": hexPos, "page": page};
+  return {"position": hexPos, "page": new Buffer(page)};
+}
+
+function flashPages(pages, next){
+  var self = this;
+
+  var queue = new Queue();
+
+  for (var i=0; i<pages.length; i++){
+    queue.place(function(i){
+      console.log(i, pages[i].pageBuffer);
+      self.flashPage(pages[i].pageBuffer, pages[i].address, pageSize, function(flashed){
+        console.log(flashed);
+        queue.next();
+      });
+    }.bind(this, i));
+  }
+}
+
+ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize, next) {
+
+  var self = this;
+  self._clockChange(CLOCKSPEED_FLASH);
+  // var funcArry = [];
+
+  var queue = new Queue();
+
+  for (var i = 0; i < pageSize/2; i++){
+    queue.place(function(i){
+      self.flashWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, res){
+        self.flashWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, res){
+          if (i+1 < pageSize/2 ){
+            queue.next();
+          } else {
+            console.log('End of page reached');
+            finishPage();
+          }
+        });
+      });
+    }.bind(this, i));
+  }
+
+  function finishPage(){
+    pageAddr = pageAddr/2 & 0xFFFF;
+
+    self.spi.transfer(new Buffer([0x4c, (pageAddr >> 8) & 0xFF, pageAddr & 0xFF, 0x00]), function(err, res){
+      self._busyWait(function(){
+        next(true);
+      });
+    });
+  }
 }
 
 ISP.prototype.flashWord = function(hilo, addr, data, next) {
+  var self = this;
   if (debug)
     console.log("data", data);
 
   this._transfer([0x40+8*hilo, (addr >> 8) && 0xFF, addr & 0xFF, data ], function (err, res) {
-    next(err, res);
+    // if ( res[2] == ((addr >> 8) && 0xFF) && res[3] == (addr & 0xFF) ) {
+      next(err, res);
+    // } else {
+      // console.log('SPI response', res);
+      // console.log('Incorrect address written, retrying...');
+      // self.flashWord( hilo, addr, data, next);
+    // }
   });
 }
 
 function execute(funcArray, err, next) {
   // executes everything in func array before calling next
-  if (funcArry.length == 0 || err) return next(err);
+  if (funcArray.length == 0 || err) return next(err);
 
-  funcArry[0](err, function(){
+  funcArray[0](err, function(){
     // splice off the beginning
     funcArray.shift();
     execute(funcArray, err, next);
@@ -286,34 +345,60 @@ ISP.prototype._busyWait = function(next){
   });
 }
 
-ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize) {
+ISP.prototype.verifyImage = function(pages, next) {
+  var self = this;
+
+  var queue = new Queue();
+
+  for (var i=0; i<pages.length; i++){
+    queue.place(function(i){
+      console.log(i, pages[i].pageBuffer);
+      self.readPage(pages[i].pageBuffer, pages[i].address, pageSize, function(flashed){
+        console.log(flashed);
+        queue.next();
+      });
+    }.bind(this, i));
+  }
+}
+
+ISP.prototype.readPage = function(pageBuffer, pageAddr, pageSize, next) {
   var self = this;
   self._clockChange(CLOCKSPEED_FLASH);
-  var funcArry = [];
+  // var funcArry = [];
+
+  var queue = new Queue();
 
   for (var i = 0; i < pageSize/2; i++){
-    funcArry.push(function(err, next){
-
-      self.flashWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, next){
-        self.flashWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, next){
-          next(err);
+    queue.place(function(i){
+      self.readWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, res){
+        self.readWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, res){
+          if (i+1 < pageSize/2 ){
+            queue.next();
+          } else {
+            console.log('End of page reached');
+            next();
+          }
         });
       });
-
-    });
+    }.bind(this, i));
   }
 
-  execute(funcArry, null, function (){
-    pageAddr = pageAddr/2 & 0xFFFF;
+}
 
-    self.spi.transfer(new Buffer[0x4C, (pageAddr >> 8) & 0xFF, pageAddr & 0xFF, 0], function(err, res) {
+ISP.prototype.readWord = function(hilo, addr, data, next) {
+  var self = this;
+  if (debug)
+    console.log("data", data);
 
-      if (res != pageAddr) return next(false);
-
-      self._busyWait(function (){
-        return next(true);
-      });
-    });
+  this._transfer([0x20+8*hilo, (addr >> 8) && 0xFF, addr & 0xFF, 0x00 ], function (err, res) {
+    console.log('These should match', data, res[3]);
+    // if ( res[2] == ((addr >> 8) && 0xFF) && res[3] == (addr & 0xFF) ) {
+      next(err, res);
+    // } else {
+      // console.log('SPI response', res);
+      // console.log('Incorrect address written, retrying...');
+      // self.flashWord( hilo, addr, data, next);
+    // }
   });
 }
 
@@ -365,8 +450,8 @@ ISP.prototype.verifyImage = function (hexText, next) {
         nextHex();
 
         if (debug) {
-          console.log("line address = 0x", parseInt(lineAddr, 'hex'));
-          console.log("page address = 0x", parseInt(pageAddr, 'hex'));
+          console.log("line address = 0x", lineAddr);
+          console.log("page address = 0x", pageAddr);
         }
 
         if (lineaddr % 2) {
@@ -418,20 +503,25 @@ ISP.prototype.verifyImage = function (hexText, next) {
 }
 
 ISP.prototype.startProgramming = function (next) {
-  this.reset.output(0);
-  this.programming.write(1);
-  this.spi.transfer(new Buffer([0xAC, 0x53, 0x00, 0x00]), function(err, rec){
-    console.log("SPI response", rec);
-    if (rec && rec[2] == 0x53){
-      next()
-    } else {
-      next(new Error('Programming confirmation not received.'));
-    }
-  });
+  var self = this;
+  self.reset.output(1);
+  setTimeout(function(){
+    self.reset.output(0);
+    self.programming.write(1);
+    self.spi.transfer(new Buffer([0xAC, 0x53, 0x00, 0x00]), function(err, rec){
+      console.log("SPI response", rec);
+      if (rec && rec[2] == 0x53){
+        next()
+      } else {
+        next(new Error('Programming confirmation not received.'));
+      }
+    });
+  },50);
 }
 
 ISP.prototype.endProgramming = function (next) {
   this.reset.output(0);
+  next();
 }
 
 ISP.prototype.eraseChip = function(next){
@@ -452,6 +542,8 @@ ISP.prototype._transfer = function (arr, next){
     console.log(err);
     return next(err);
   }
+
+  console.log(arr.map(function(e){ return e.toString(16) }));
 
   this.spi.transfer(new Buffer(arr), function(err, res){
     next(null, res);// 0xFFFFFF & ((res[1]<<16)+(res[2]<<8) + res[3]));
