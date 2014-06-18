@@ -14,16 +14,18 @@ var CLOCKSPEED_FUSES = 125000 // Arduino's SPI_CLOCK_DIV128, 125Khz
 var debug = false;
 
 ISP = function(hardware, options){
-  this.chipSelect = hardware.digital[0];
-  this.reset = hardware.digital[1];
+  this.chipSelect = hardware.digital[0].output().high();
+  this.reset = hardware.digital[1].output().high();
   this.spi = new hardware.SPI(
     {clockSpeed:CLOCKSPEED_FUSES, mode:0
-      , chipSelect:this.chipSelect});
+      });
 
   this.success = tessel.led[0];
   this.programming = tessel.led[1];
 
   this.clockSpeed = CLOCKSPEED_FUSES;
+
+  this.incorrect = 0;
 }
 
 ISP.prototype._clockChange = function (speed) {
@@ -73,45 +75,46 @@ ISP.prototype.verifyFuses = function (fuses, mask, next) {
   self._clockChange(CLOCKSPEED_FUSES);
   var queue = new Queue();
 
-  queue.place(function verifyLock(){
-    self._transfer([0x58, 0x00, 0x00, 0x00], function(err, res){
-      if (res[3] & mask.lock) {
-        queue.next();
-      } else {
-        return next(new Error('Could not verify lock fuse'));
-      }
-    });
-  });
+  // queue.place(function verifyLock(){
+  //   self._transfer([0x58, 0x00, 0x00, 0x00], function(err, res){
+  //     if (res[3] & mask.lock) {
+  //       queue.next();
+  //     } else {
+  //       return next(new Error('Could not verify lock fuse'));
+  //     }
+  //   });
+  // });
 
   queue.place(function verifyLow(){
     self._transfer([0x50, 0x00, 0x00, 0x00], function(err, res){
       if (res[3] & mask.low) {
-        queue.next();
+        // queue.next();
+        return next();
       } else {
         return next(new Error('Could not verify low fuse'));
       }
     });
   });
 
-  queue.place(function verifyHigh(){
-    self._transfer([0x58, 0x08, 0x00, 0x00], function(err, res){
-      if (res[3] & mask.high) {
-        queue.next();
-      } else {
-        return next(new Error('Could not verify high fuse'));
-      }
-    });
-  });
+  // queue.place(function verifyHigh(){
+  //   self._transfer([0x58, 0x08, 0x00, 0x00], function(err, res){
+  //     if (res[3] & mask.high) {
+  //       queue.next();
+  //     } else {
+  //       return next(new Error('Could not verify high fuse'));
+  //     }
+  //   });
+  // });
 
-  queue.place(function verifyExt(){
-    self._transfer([0x50, 0x08, 0x00, 0x00], function(err, res){
-      if (res[3] & mask.ext) {
-        return next();
-      } else {
-        return next(new Error('Could not verify ext fuse'));
-      }
-    });
-  });
+  // queue.place(function verifyExt(){
+  //   self._transfer([0x50, 0x08, 0x00, 0x00], function(err, res){
+  //     if (res[3] & mask.ext) {
+  //       return next();
+  //     } else {
+  //       return next(new Error('Could not verify ext fuse'));
+  //     }
+  //   });
+  // });
 
 }
 
@@ -121,35 +124,42 @@ ISP.prototype.programFuses = function (next) {
   self._clockChange(CLOCKSPEED_FUSES);
   var queue = new Queue();
 
-  queue.place(function programLock(){
-    self._transfer([0xAC, 0xE0, 0x00, FUSES.lock], function(err, res){
-      queue.next();
-    });
-  });
+  // queue.place(function programLock(){
+  //   self._transfer([0xAC, 0xE0, 0x00, FUSES.lock], function(err, res){
+  //     queue.next();
+  //   });
+  // });
 
   queue.place(function programLow(){
     self._transfer([0xAC, 0xA0, 0x00, FUSES.low], function(err, res){
-      queue.next();
-    });
-  });
-
-  queue.place(function programHigh(){
-    self._transfer([0xAC, 0xA8, 0x00, FUSES.high], function(err, res){
-      queue.next();
-    });
-  });
-
-  queue.place(function programExt(){
-    self._transfer([0xAC, 0xA4, 0x00, FUSES.ext], function(err, res){
+      // queue.next();
       self.verifyFuses(FUSES, MASK, function(err){
         if (err){
           next(err);
-        }else{
+        } else {
           next();
         }
       });
     });
   });
+
+  // queue.place(function programHigh(){
+  //   self._transfer([0xAC, 0xA8, 0x00, FUSES.high], function(err, res){
+  //     queue.next();
+  //   });
+  // });
+
+  // queue.place(function programExt(){
+  //   self._transfer([0xAC, 0xA4, 0x00, FUSES.ext], function(err, res){
+  //     self.verifyFuses(FUSES, MASK, function(err){
+  //       if (err){
+  //         next(err);
+  //       }else{
+  //         next();
+  //       }
+  //     });
+  //   });
+  // });
 
 }
 
@@ -258,49 +268,71 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
   return {"position": hexPos, "page": new Buffer(page)};
 }
 
-function flashPages(pages, next){
+ISP.prototype.flashImage = function(pages, pageSize, next){
   var self = this;
 
   var queue = new Queue();
 
+  var commands = [];
+
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
-      console.log(i, pages[i].pageBuffer);
-      self.flashPage(pages[i].pageBuffer, pages[i].address, pageSize, function(flashed){
-        console.log(flashed);
-        queue.next();
-      });
+      debug && console.log(i, pages[i].pageBuffer);
+      console.log('still pushing commands');
+      commands.push(self.flashPage(pages[i].pageBuffer, pages[i].address, pageSize ));//, function(flashed){
+        if (i+1 < pages.length){
+          // console.log(flashed);
+          queue.next();
+        } else {
+        //   next();
+          self.startProgramming(function(){
+            self.flashAll(commands, next);
+          });
+        }
+      // });
     }.bind(this, i));
   }
 }
 
-ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize, next) {
+ISP.prototype.flashAll = function(commands, next){
+  console.log('starting flashing');
+  var self = this;
+  if (commands.length){
+    self._transfer(commands[0], function(){
+      commands.shift();
+      self.flashAll(commands, next);
+    });
+  } else {
+    next();
+  }
+}
 
+ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize, next) {
   var self = this;
   self._clockChange(CLOCKSPEED_FLASH);
   // var funcArry = [];
 
   var queue = new Queue();
+  var spiQueue = [];
+
 
   for (var i = 0; i < pageSize/2; i++){
-    queue.place(function(i){
-      self.flashWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, res){
-        self.flashWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, res){
-          if (i+1 < pageSize/2 ){
-            queue.next();
-          } else {
-            console.log('End of page reached');
-            finishPage();
-          }
-        });
-      });
-    }.bind(this, i));
+    var addr = i+pageAddr/2
+    spiQueue.push(0x40, (addr >> 8) & 0xFF, addr & 0xFF, pageBuff[2*i]);
+    spiQueue.push(0x48, (addr >> 8) & 0xFF, addr & 0xFF, pageBuff[2*i+1]);
+    if ( i+1 == pageSize/2 ) {
+      // write();
+      pageAddr = pageAddr/2 & 0xFFFF;
+      spiQueue.push(0x4c, (pageAddr >> 8) & 0xFF, pageAddr & 0xFF, 0x00);
+      return spiQueue
+    }
   }
 
-  function finishPage(){
+  function write(){
     pageAddr = pageAddr/2 & 0xFFFF;
-
-    self.spi.transfer(new Buffer([0x4c, (pageAddr >> 8) & 0xFF, pageAddr & 0xFF, 0x00]), function(err, res){
+    spiQueue.push(0x4c, (pageAddr >> 8) & 0xFF, pageAddr & 0xFF, 0x00);
+    console.log('writing page at 0x', pageAddr.toString(16));
+    self._transfer(spiQueue, function(err, res){
       self._busyWait(function(){
         next(true);
       });
@@ -308,44 +340,7 @@ ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize, next) {
   }
 }
 
-ISP.prototype.flashWord = function(hilo, addr, data, next) {
-  var self = this;
-  if (debug)
-    console.log("data", data);
-
-  this._transfer([0x40+8*hilo, (addr >> 8) && 0xFF, addr & 0xFF, data ], function (err, res) {
-    // if ( res[2] == ((addr >> 8) && 0xFF) && res[3] == (addr & 0xFF) ) {
-      next(err, res);
-    // } else {
-      // console.log('SPI response', res);
-      // console.log('Incorrect address written, retrying...');
-      // self.flashWord( hilo, addr, data, next);
-    // }
-  });
-}
-
-function execute(funcArray, err, next) {
-  // executes everything in func array before calling next
-  if (funcArray.length == 0 || err) return next(err);
-
-  funcArray[0](err, function(){
-    // splice off the beginning
-    funcArray.shift();
-    execute(funcArray, err, next);
-  });
-}
-
-// polls chip until it is no longer busy
-ISP.prototype._busyWait = function(next){
-  var self = this;
-  this.spi.transfer(new Buffer([0xF0, 0x00, 0x00, 0x00]), function (err, res){
-
-    if (res & 0x01) return self._busyWait(next);
-    else return next();
-  });
-}
-
-ISP.prototype.verifyImage = function(pages, next) {
+ISP.prototype.verifyImage = function(pages, pageSize, next) {
   var self = this;
 
   var queue = new Queue();
@@ -353,15 +348,18 @@ ISP.prototype.verifyImage = function(pages, next) {
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
       console.log(i, pages[i].pageBuffer);
-      self.readPage(pages[i].pageBuffer, pages[i].address, pageSize, function(flashed){
-        console.log(flashed);
-        queue.next();
+      self.readPage(pages[i].pageBuffer, pages[i].address, pageSize, function(){
+        if (i+1 < pages.length){
+          queue.next();
+        } else {
+          next();
+        }
       });
     }.bind(this, i));
   }
 }
 
-ISP.prototype.readPage = function(pageBuffer, pageAddr, pageSize, next) {
+ISP.prototype.readPage = function(pageBuff, pageAddr, pageSize, next) {
   var self = this;
   self._clockChange(CLOCKSPEED_FLASH);
   // var funcArry = [];
@@ -390,123 +388,22 @@ ISP.prototype.readWord = function(hilo, addr, data, next) {
   if (debug)
     console.log("data", data);
 
-  this._transfer([0x20+8*hilo, (addr >> 8) && 0xFF, addr & 0xFF, 0x00 ], function (err, res) {
-    console.log('These should match', data, res[3]);
-    // if ( res[2] == ((addr >> 8) && 0xFF) && res[3] == (addr & 0xFF) ) {
+  this._transfer([0x20+8*hilo, (addr >> 8) & 0xFF, addr & 0xFF, 0x00 ], function (err, res) {
+    if ( data != res[3]){
+      console.log('Error verifying data. Expected', data,', got', res[3], 'at 0x', addr.toString(16));
+      self.incorrect++;
       next(err, res);
-    // } else {
-      // console.log('SPI response', res);
-      // console.log('Incorrect address written, retrying...');
-      // self.flashWord( hilo, addr, data, next);
-    // }
-  });
-}
-
-ISP.prototype.verifyImage = function (hexText, next) {
-  // does a byte to byte verification of the image
-  var self = this;
-  var address = 0;
-  var hexPos = 0;
-  var len, hexByte, checksum;
-
-  function nextHex(){
-    hexByte = hexToN(hexText[++hexPos]);
-    hexByte = (hexByte << 4) + hexToN(hexText[++hexPos]);
-    checksum += hexByte;
-  }
-
-  self._clockChange(CLOCKSPEED_FLASH);
-
-  function check(err, next) {
-    if (err) return console.log("Check error", err);
-
-    if (hexText[++hexPos] != 0x3a) {
-      var error = "Error: No colon";
-      console.log(error);
-      next("No colon");
+    } else {
+      next(err, res);
     }
-
-    len = hexToN(hexText[++hexPos]);
-    len = (len<<4) + hexToN(hexText[++hexPos]);
-    checksum = len;
-
-    nextHex();
-    lineAddr = hexByte;
-
-    nextHex();
-    lineAddr = (lineAddr << 8) + hexByte;
-
-    nextHex();
-
-    if (hexByte == 0x1){
-      if (debug) console.log("ending it now");
-
-      next(null);
-    }
-
-    var funcArry = [];
-    for (var i = 0; i < len; i++){
-      funcArry.push(function(err, next){
-        nextHex();
-
-        if (debug) {
-          console.log("line address = 0x", lineAddr);
-          console.log("page address = 0x", pageAddr);
-        }
-
-        if (lineaddr % 2) {
-          // high byte
-          self._transfer([0x28, lineAddr >> 9, lineAddr/2, 0], function (err, res){
-            if (hexByte != res && 0xFF) {
-              console.log("verification error at", lineAddr);
-              console.log("should be", parseInt(hexByte, 'hex'), "not", parseInt(res & 0xFF, 'hex'));
-              return next("verification error");
-            }
-            return next();
-
-          });
-        } else {
-          // low byte
-          self._transfer([0x20, lineAddr >> 9, lineAddr/2, 0], function (err, res) {
-            if (hexByte != res && 0xFF) {
-              console.log("verification error at", lineAddr);
-              console.log("should be", parseInt(hexByte, 'hex'), "not", parseInt(res & 0xFF, 'hex'));
-              return next("verification error");
-            }
-
-            return next();
-          });
-        }
-      });
-    }
-
-    execute(funcArry, null, function(err){
-      lineaddr++;
-
-      nextHex();
-      if (checksum != 0) {
-        console.log('bad checksum');
-        return check('bad checksum');
-      }
-
-      if (hexText[++hexPos] != '\n'){
-        console.log("no end of line");
-        return check('no end of line');
-      }
-      check(err, next);
-    });
-  }
-
-  check(null, function(err){
-    next(err);
   });
 }
 
 ISP.prototype.startProgramming = function (next) {
   var self = this;
-  self.reset.output(1);
+  self.reset.write(1);
   setTimeout(function(){
-    self.reset.output(0);
+    self.reset.write(0);
     self.programming.write(1);
     self.spi.transfer(new Buffer([0xAC, 0x53, 0x00, 0x00]), function(err, rec){
       console.log("SPI response", rec);
@@ -520,7 +417,8 @@ ISP.prototype.startProgramming = function (next) {
 }
 
 ISP.prototype.endProgramming = function (next) {
-  this.reset.output(0);
+  this.reset.write(1);
+  this.programming.write(0);
   next();
 }
 
@@ -537,16 +435,27 @@ ISP.prototype.eraseChip = function(next){
 }
 
 ISP.prototype._transfer = function (arr, next){
-  if (arr.length != 4) {
+  console.log('sending', arr.length/4, 'commands');
+  if (arr.length%4 != 0) {
     var err = "isp transfer called with wrong size. needs to be 4 bytes, got "+arr;
     console.log(err);
     return next(err);
   }
 
-  console.log(arr.map(function(e){ return e.toString(16) }));
+  debug && console.log(arr.map(function(e){ return e.toString(16) }));
 
   this.spi.transfer(new Buffer(arr), function(err, res){
     next(null, res);// 0xFFFFFF & ((res[1]<<16)+(res[2]<<8) + res[3]));
+  });
+}
+
+// polls chip until it is no longer busy
+ISP.prototype._busyWait = function(next){
+  var self = this;
+  this.spi.transfer(new Buffer([0xF0, 0x00, 0x00, 0x00]), function (err, res){
+
+    if (res[3] & 1) return self._busyWait(next);
+    else return next();
   });
 }
 
