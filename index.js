@@ -295,7 +295,8 @@ ISP.prototype.flashImage = function(pages, pageSize, next){
 }
 
 ISP.prototype.flashAll = function(commands, next){
-  console.log('starting flashing');
+  if (debug)
+    console.log('starting flashing');
   var self = this;
   if (commands.length){
     self._transfer(commands[0], function(){
@@ -406,7 +407,8 @@ ISP.prototype.startProgramming = function (next) {
     self.reset.write(0);
     self.programming.write(1);
     self.spi.transfer(new Buffer([0xAC, 0x53, 0x00, 0x00]), function(err, rec){
-      console.log("SPI response", rec);
+      if (debug)
+        console.log("SPI response", rec);
       if (rec && rec[2] == 0x53){
         next()
       } else {
@@ -435,7 +437,6 @@ ISP.prototype.eraseChip = function(next){
 }
 
 ISP.prototype._transfer = function (arr, next){
-  console.log('sending', arr.length/4, 'commands');
   if (arr.length%4 != 0) {
     var err = "isp transfer called with wrong size. needs to be 4 bytes, got "+arr;
     console.log(err);

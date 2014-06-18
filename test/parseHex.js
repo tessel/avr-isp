@@ -10,16 +10,20 @@ var pageSize = 64;
 
 isp.startProgramming(function(err){
   if (!err){
+    console.log('Verifying signature...');
     isp.readSignature(function(err, sig){
       err && console.log(err);
+      console.log('Verified');
       isp.eraseChip(function(){
-        console.log("Chip erased!");
+        console.log("Flash cleared.");
         isp.programFuses(function(err){
           err && console.log(err);
           isp.endProgramming(function(){
+            console.log('Parsing hex file...');
             readPagesFromHexFile('ambient-attx4.hex', function(err, pages){
               isp.flashImage(pages, pageSize, function(){
                 isp.endProgramming(function(){
+                  console.log('Done programming!');
                   // isp.startProgramming(function(){
                   //   isp.verifyImage(pages, pageSize, function(){
                   //     console.log(isp.incorrect,'bytes written incorrectly');
