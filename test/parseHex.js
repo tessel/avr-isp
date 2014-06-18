@@ -7,6 +7,7 @@ var fs = require('fs');
 var isp = avrLib.use(tessel.port['A']);
 
 var pageSize = 64;
+var fileName = 'ir.hex';
 
 isp.startProgramming(function(err){
   if (!err){
@@ -20,7 +21,7 @@ isp.startProgramming(function(err){
           err && console.log(err);
           isp.endProgramming(function(){
             console.log('Parsing hex file...');
-            readPagesFromHexFile('ambient-attx4.hex', function(err, pages){
+            readPagesFromHexFile(fileName, function(err, pages){
               isp.flashImage(pages, pageSize, function(){
                 isp.endProgramming(function(){
                   console.log('Done programming!');

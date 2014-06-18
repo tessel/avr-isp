@@ -278,7 +278,6 @@ ISP.prototype.flashImage = function(pages, pageSize, next){
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
       debug && console.log(i, pages[i].pageBuffer);
-      console.log('still pushing commands');
       commands.push(self.flashPage(pages[i].pageBuffer, pages[i].address, pageSize ));//, function(flashed){
         if (i+1 < pages.length){
           // console.log(flashed);
