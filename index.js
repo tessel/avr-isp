@@ -18,7 +18,7 @@ ISP = function(hardware, options){
   this.reset = hardware.digital[1].output().high();
   this.spi = new hardware.SPI(
     {clockSpeed:CLOCKSPEED_FUSES, mode:0
-      });
+    });
 
   this.success = tessel.led[0];
   this.programming = tessel.led[1];
@@ -42,7 +42,7 @@ ISP.prototype.readSignature = function(next){
     console.log("Reading signature");
 
   var signature;
-  self._clockChange(CLOCKSPEED_FUSES);
+  // self._clockChange(CLOCKSPEED_FUSES);
 
   self._transfer([0x30, 0x00, 0x00, 0x00], function(err, res){
     self._transfer([0x30, 0x00, 0x01, 0x00], function(err, res){
@@ -72,7 +72,7 @@ ISP.prototype.readSignature = function(next){
 ISP.prototype.verifyFuses = function (fuses, mask, next) {
   // verifies only the low fuse for now
   var self = this;
-  self._clockChange(CLOCKSPEED_FUSES);
+  // self._clockChange(CLOCKSPEED_FUSES);
   var queue = new Queue();
 
   // queue.place(function verifyLock(){
@@ -121,7 +121,7 @@ ISP.prototype.verifyFuses = function (fuses, mask, next) {
 ISP.prototype.programFuses = function (next) {
   var self = this;
   // write only the low fuse for now
-  self._clockChange(CLOCKSPEED_FUSES);
+  // self._clockChange(CLOCKSPEED_FUSES);
   var queue = new Queue();
 
   // queue.place(function programLock(){
@@ -309,7 +309,7 @@ ISP.prototype.flashAll = function(commands, next){
 
 ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize, next) {
   var self = this;
-  self._clockChange(CLOCKSPEED_FLASH);
+  // self._clockChange(CLOCKSPEED_FLASH);
   // var funcArry = [];
 
   var queue = new Queue();
@@ -361,7 +361,7 @@ ISP.prototype.verifyImage = function(pages, pageSize, next) {
 
 ISP.prototype.readPage = function(pageBuff, pageAddr, pageSize, next) {
   var self = this;
-  self._clockChange(CLOCKSPEED_FLASH);
+  // self._clockChange(CLOCKSPEED_FLASH);
   // var funcArry = [];
 
   var queue = new Queue();
@@ -424,7 +424,7 @@ ISP.prototype.endProgramming = function (next) {
 
 ISP.prototype.eraseChip = function(next){
   var self = this;
-  self._clockChange(CLOCKSPEED_FUSES);
+  // self._clockChange(CLOCKSPEED_FUSES);
 
   self._transfer([0xAC, 0x80, 0, 0], function (err){
     if (debug) console.log("sent erase, waiting for done signal");
