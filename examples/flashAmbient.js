@@ -1,12 +1,12 @@
 var tessel = require('tessel');
-var avrLib = require('../');
 var Queue = require('sync-queue');
 
-var fs = require('fs');
+
+var avrLib = require('../');
 
 var isp = avrLib.use(tessel.port['A'], {
   pageSize : 64,
-  fileName : 'ambient-attx4.hex'
+  fileName : 'examples/ambient-attx4.hex'
   });
 
 
