@@ -16,7 +16,7 @@ var avrLib = require('../');
 var isp = avrLib.use(tessel.port['A'], {
   pageSize : 64, // Microcontroller memory page size in bytes. 64 bytes for the ATTiny44
   fileName : 'my-firmware.hex' // File path to your custom firmware
-  });
+});
 
 ```
 
