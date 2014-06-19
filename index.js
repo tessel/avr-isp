@@ -308,15 +308,12 @@ ISP.prototype.flashImage = function(pages, next){
       debug && console.log(i, pages[i].pageBuffer);
       commands.push(self.flashPage(pages[i].pageBuffer, pages[i].address ));//, function(flashed){
         if (i+1 < pages.length){
-          // console.log(flashed);
           queue.next();
         } else {
-        //   next();
           self.startProgramming(function(){
             self.flashAll(commands, next);
           });
         }
-      // });
     }.bind(this, i));
   }
 }
@@ -338,7 +335,6 @@ ISP.prototype.flashAll = function(commands, next){
 ISP.prototype.flashPage = function(pageBuff, pageAddr, next) {
   var self = this;
   // self._clockChange(CLOCKSPEED_FLASH);
-  // var funcArry = [];
 
   var queue = new Queue();
   var spiQueue = [];
@@ -349,22 +345,10 @@ ISP.prototype.flashPage = function(pageBuff, pageAddr, next) {
     spiQueue.push(0x40, (addr >> 8) & 0xFF, addr & 0xFF, pageBuff[2*i]);
     spiQueue.push(0x48, (addr >> 8) & 0xFF, addr & 0xFF, pageBuff[2*i+1]);
     if ( i+1 == self.pageSize/2 ) {
-      // write();
       pageAddr = pageAddr/2 & 0xFFFF;
       spiQueue.push(0x4c, (pageAddr >> 8) & 0xFF, pageAddr & 0xFF, 0x00);
       return spiQueue
     }
-  }
-
-  function write(){
-    pageAddr = pageAddr/2 & 0xFFFF;
-    spiQueue.push(0x4c, (pageAddr >> 8) & 0xFF, pageAddr & 0xFF, 0x00);
-    console.log('writing page at 0x', pageAddr.toString(16));
-    self._transfer(spiQueue, function(err, res){
-      self._busyWait(function(){
-        next(true);
-      });
-    });
   }
 }
 
@@ -390,7 +374,6 @@ ISP.prototype.verifyImage = function(pages, next) {
 ISP.prototype.readPage = function(pageBuff, pageAddr, next) {
   var self = this;
   // self._clockChange(CLOCKSPEED_FLASH);
-  // var funcArry = [];
 
   var queue = new Queue();
 
@@ -473,7 +456,7 @@ ISP.prototype._transfer = function (arr, next){
   debug && console.log(arr.map(function(e){ return e.toString(16) }));
 
   this.spi.transfer(new Buffer(arr), function(err, res){
-    next(null, res);// 0xFFFFFF & ((res[1]<<16)+(res[2]<<8) + res[3]));
+    next(null, res);
   });
 }
 
