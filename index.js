@@ -12,7 +12,7 @@ var CLOCKSPEED_FUSES = 125000 // Arduino's SPI_CLOCK_DIV128, 125Khz
   , HIGH = 0x01
   , LOW = 0x00
   ;
-var debug = true;
+var debug = false;
 
 ISP = function(hardware, options){
   this.chipSelect = hardware.digital[0].output().high();
@@ -48,29 +48,36 @@ ISP.prototype.readSignature = function(next){
   var signature;
   // self._clockChange(CLOCKSPEED_FUSES);
 
-  self._transfer([0x30, 0x00, 0x00, 0x00], function(err, res){
-    self._transfer([0x30, 0x00, 0x01, 0x00], function(err, res){
-      if (debug)
-        console.log("signature 1", res[3]);
+  self.startProgramming(function(err){
+    if (!err){
+      self._transfer([0x30, 0x00, 0x00, 0x00], function(err, res){
+        self._transfer([0x30, 0x00, 0x01, 0x00], function(err, res){
+          if (debug)
+            console.log("signature 1", res[3]);
 
-      signature = res[3] << 8;
+          signature = res[3] << 8;
 
-      self._transfer([0x30, 0x00, 0x02, 0x00], function(err, res){
-        if (debug)
-          console.log("signature 2", res[3]);
-        signature = signature | res[3];
+          self._transfer([0x30, 0x00, 0x02, 0x00], function(err, res){
+            if (debug)
+              console.log("signature 2", res[3]);
+            signature = signature | res[3];
 
-        if (debug)
-          console.log("got signature", signature);
+            if (debug)
+              console.log("got signature", signature);
 
-        if (signature == 0 || signature == 0xFFFF) {
-          return next("Could not find a signature", signature);
-        }
+            if (signature == 0 || signature == 0xFFFF) {
+              return next("Could not find a signature", signature);
+            }
 
-        return next(null, signature);
+            return next(null, signature);
+          });
+        });
       });
-    });
+    } else {
+      next(err);
+    }
   });
+
 }
 
 ISP.prototype.verifyFuses = function (fuses, mask, next) {
@@ -138,11 +145,13 @@ ISP.prototype.programFuses = function (next) {
     self._transfer([0xAC, 0xA0, 0x00, FUSES.low], function(err, res){
       // queue.next();
       self.verifyFuses(FUSES, MASK, function(err){
-        if (err){
-          next(err);
-        } else {
-          next();
-        }
+        self.endProgramming(function(){
+          if (err){
+            next(err);
+          } else {
+            next();
+          }
+        });
       });
     });
   });
@@ -306,7 +315,7 @@ ISP.prototype.flashImage = function(pages, next){
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
       debug && console.log(i, pages[i].pageBuffer);
-      commands.push(self.flashPage(pages[i].pageBuffer, pages[i].address ));//, function(flashed){
+      commands.push(self.queuePage(pages[i].pageBuffer, pages[i].address ));//, function(flashed){
         if (i+1 < pages.length){
           queue.next();
         } else {
@@ -328,11 +337,13 @@ ISP.prototype.flashAll = function(commands, next){
       self.flashAll(commands, next);
     });
   } else {
-    next();
+    self.endProgramming(function(){
+      next();
+    });
   }
 }
 
-ISP.prototype.flashPage = function(pageBuff, pageAddr, next) {
+ISP.prototype.queuePage = function(pageBuff, pageAddr, next) {
   var self = this;
   // self._clockChange(CLOCKSPEED_FLASH);
 
