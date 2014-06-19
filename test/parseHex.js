@@ -4,10 +4,7 @@ var Queue = require('sync-queue');
 
 var fs = require('fs');
 
-var isp = avrLib.use(tessel.port['A']);
-
-var pageSize = 64;
-var fileName = 'ir.hex';
+var isp = avrLib.use(tessel.port['A'], {pageSize : 64, fileName : 'ambient-attx4.hex'});
 
 isp.startProgramming(function(err){
   if (!err){
@@ -21,15 +18,12 @@ isp.startProgramming(function(err){
           err && console.log(err);
           isp.endProgramming(function(){
             console.log('Parsing hex file...');
-            readPagesFromHexFile(fileName, function(err, pages){
-              isp.flashImage(pages, pageSize, function(){
+            isp.readPagesFromHexFile(function(err, pages){
+              err && console.log('Parse error: ',err);
+              console.log('Flashing chip memory');
+              isp.flashImage(pages, function(){
                 isp.endProgramming(function(){
                   console.log('Done programming!');
-                  // isp.startProgramming(function(){
-                  //   isp.verifyImage(pages, pageSize, function(){
-                  //     console.log(isp.incorrect,'bytes written incorrectly');
-                  //   });
-                  // });
                 });
               });
             });
@@ -39,26 +33,3 @@ isp.startProgramming(function(err){
     });
   }
 })
-
-function readPagesFromHexFile(fname, next){
-  fs.readFile(fname, function(err, data){
-    if (err){
-      next(err);
-    } else {
-      var pos = {position: -1};
-      var pageAddr = 0;
-      var pages = [];
-
-      ;(function readPage(position){
-        if( position.position < data.length){
-          pos = isp.readImagePage(pos.position, data, pageAddr, pageSize);
-          pages.push({ pageBuffer:pos.page, address: pageAddr});
-          pageAddr+=pageSize;
-          setImmediate(readPage(pos));
-        } else {
-          next(null, pages);
-        }
-      })(pos)
-    }
-  });
-}

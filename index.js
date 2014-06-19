@@ -1,5 +1,6 @@
 var tessel = require('tessel');
 var Queue = require('sync-queue');
+var fs = require('fs');
 
 // #define CLOCKSPEED_FUSES   SPI_CLOCK_DIV128
 // #define CLOCKSPEED_FLASH   SPI_CLOCK_DIV8
@@ -11,7 +12,7 @@ var CLOCKSPEED_FUSES = 125000 // Arduino's SPI_CLOCK_DIV128, 125Khz
   , HIGH = 0x01
   , LOW = 0x00
   ;
-var debug = false;
+var debug = true;
 
 ISP = function(hardware, options){
   this.chipSelect = hardware.digital[0].output().high();
@@ -22,6 +23,9 @@ ISP = function(hardware, options){
 
   this.success = tessel.led[0];
   this.programming = tessel.led[1];
+
+  this.pageSize = options.pageSize;
+  this.fname = options.fileName
 
   this.clockSpeed = CLOCKSPEED_FUSES;
 
@@ -163,8 +167,36 @@ ISP.prototype.programFuses = function (next) {
 
 }
 
+ISP.prototype.readPagesFromHexFile = function(next){
+  var self = this;
+  fs.readFile(self.fname, function(err, data){
+    if (err){
+      if (debug)
+        console.log('File read error!', err);
+      next(err);
+    } else {
+      var pos = {position: -1};
+      var pageAddr = 0;
+      var pages = [];
+
+      ;(function readPage(position){
+        if( position.position < data.length){
+          pos = self.readImagePage(pos.position, data, pageAddr);
+          pages.push({ pageBuffer:pos.page, address: pageAddr});
+          pageAddr+=self.pageSize;
+          setImmediate(readPage(pos));
+        } else {
+          next(null, pages);
+        }
+      })(pos)
+    }
+  });
+}
+
 // returns position of page read
-ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
+ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr) {
+  var self = this;
+
   var len;
   var page_idx = 0;
   var beginning = hexText;
@@ -179,7 +211,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
   }
 
   // initiate the page by filling it with 0xFFs
-  for (var i = 0; i<pageSize; i++){
+  for (var i = 0; i<self.pageSize; i++){
     page[i] = 0xFF;
   }
 
@@ -204,7 +236,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
     nextHex();
     lineAddr = (lineAddr << 8) + hexByte;
 
-    if (lineAddr >= (pageAddr + pageSize)){
+    if (lineAddr >= (pageAddr + self.pageSize)){
       console.log('line address bigger than pages', lineAddr);
       return beginning;
     }
@@ -225,14 +257,10 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
     for (var i = 0; i<len; i++){
       nextHex();
 
-      if (debug) {
-        console.log(hexByte+' ');
-      }
-
       page[page_idx] = hexByte;
       page_idx++;
 
-      if (page_idx > pageSize) {
+      if (page_idx > self.pageSize) {
         console.log("Error: too much code");
         break;
       }
@@ -259,7 +287,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
     if (debug)
       console.log("page idx", page_idx);
 
-    if (page_idx == pageSize)
+    if (page_idx == self.pageSize)
       break;
   }
 
@@ -268,7 +296,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr, pageSize) {
   return {"position": hexPos, "page": new Buffer(page)};
 }
 
-ISP.prototype.flashImage = function(pages, pageSize, next){
+ISP.prototype.flashImage = function(pages, next){
   var self = this;
 
   var queue = new Queue();
@@ -278,7 +306,7 @@ ISP.prototype.flashImage = function(pages, pageSize, next){
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
       debug && console.log(i, pages[i].pageBuffer);
-      commands.push(self.flashPage(pages[i].pageBuffer, pages[i].address, pageSize ));//, function(flashed){
+      commands.push(self.flashPage(pages[i].pageBuffer, pages[i].address ));//, function(flashed){
         if (i+1 < pages.length){
           // console.log(flashed);
           queue.next();
@@ -295,7 +323,7 @@ ISP.prototype.flashImage = function(pages, pageSize, next){
 
 ISP.prototype.flashAll = function(commands, next){
   if (debug)
-    console.log('starting flashing');
+    console.log('starting flash');
   var self = this;
   if (commands.length){
     self._transfer(commands[0], function(){
@@ -307,7 +335,7 @@ ISP.prototype.flashAll = function(commands, next){
   }
 }
 
-ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize, next) {
+ISP.prototype.flashPage = function(pageBuff, pageAddr, next) {
   var self = this;
   // self._clockChange(CLOCKSPEED_FLASH);
   // var funcArry = [];
@@ -316,11 +344,11 @@ ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize, next) {
   var spiQueue = [];
 
 
-  for (var i = 0; i < pageSize/2; i++){
+  for (var i = 0; i < self.pageSize/2; i++){
     var addr = i+pageAddr/2
     spiQueue.push(0x40, (addr >> 8) & 0xFF, addr & 0xFF, pageBuff[2*i]);
     spiQueue.push(0x48, (addr >> 8) & 0xFF, addr & 0xFF, pageBuff[2*i+1]);
-    if ( i+1 == pageSize/2 ) {
+    if ( i+1 == self.pageSize/2 ) {
       // write();
       pageAddr = pageAddr/2 & 0xFFFF;
       spiQueue.push(0x4c, (pageAddr >> 8) & 0xFF, pageAddr & 0xFF, 0x00);
@@ -340,7 +368,7 @@ ISP.prototype.flashPage = function(pageBuff, pageAddr, pageSize, next) {
   }
 }
 
-ISP.prototype.verifyImage = function(pages, pageSize, next) {
+ISP.prototype.verifyImage = function(pages, next) {
   var self = this;
 
   var queue = new Queue();
@@ -348,7 +376,7 @@ ISP.prototype.verifyImage = function(pages, pageSize, next) {
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
       console.log(i, pages[i].pageBuffer);
-      self.readPage(pages[i].pageBuffer, pages[i].address, pageSize, function(){
+      self.readPage(pages[i].pageBuffer, pages[i].address, function(){
         if (i+1 < pages.length){
           queue.next();
         } else {
@@ -359,18 +387,18 @@ ISP.prototype.verifyImage = function(pages, pageSize, next) {
   }
 }
 
-ISP.prototype.readPage = function(pageBuff, pageAddr, pageSize, next) {
+ISP.prototype.readPage = function(pageBuff, pageAddr, next) {
   var self = this;
   // self._clockChange(CLOCKSPEED_FLASH);
   // var funcArry = [];
 
   var queue = new Queue();
 
-  for (var i = 0; i < pageSize/2; i++){
+  for (var i = 0; i < self.pageSize/2; i++){
     queue.place(function(i){
       self.readWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, res){
         self.readWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, res){
-          if (i+1 < pageSize/2 ){
+          if (i+1 < self.pageSize/2 ){
             queue.next();
           } else {
             console.log('End of page reached');
