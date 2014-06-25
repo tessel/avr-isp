@@ -40,10 +40,15 @@ function writeHexFile(next){
       console.log('Flashing chip memory');
       isp.flashImage(pages, function(){
           console.log('Done programming!');
-          next();
+          next(pages);
       });
     }
   });
+}
+
+function verifyHexFile(pages, next){
+  console.log('Verifying flash was written properly');
+  isp.verifyImage(pages, next);
 }
 
 function execute(){
@@ -56,7 +61,12 @@ function execute(){
   });
 
   queue.place(function(){
-    writeHexFile(function(){
+    writeHexFile(function(pages){
+      // queue.place(function(){
+      //   verifyHexFile(pages, function(){
+      //   console.log('Verification complete.');
+      //   })
+      // });
       queue.next();
     });
   });

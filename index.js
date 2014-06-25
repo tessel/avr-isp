@@ -227,7 +227,6 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr) {
   while (1) {
     var lineAddr;
     if ( hexText[++hexPos] != 0x3a) {
-      console.log('dump', hexPos, hexText[hexPos-2],hexText[hexPos-1],hexText[hexPos],hexText[hexPos+1]);
       if (debug) console.log("no colon, stopping image read");
       return;
     }
