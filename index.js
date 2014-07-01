@@ -2,9 +2,6 @@ var tessel = require('tessel');
 var Queue = require('sync-queue');
 var fs = require('fs');
 
-// #define CLOCKSPEED_FUSES   SPI_CLOCK_DIV128
-// #define CLOCKSPEED_FLASH   SPI_CLOCK_DIV8
-
 var CLOCKSPEED_FUSES = 125000 // Arduino's SPI_CLOCK_DIV128, 125Khz
   , CLOCKSPEED_FLASH = 2000000 // SPI_CLOCK_DIV8, 2Mhz
   , FUSES = {"lock": 0xFF, "low": 0xE2, "high": 0xDF, "ext": 0xFF}  // pre program fuses (prot/lock, low, high, ext)
@@ -46,7 +43,6 @@ ISP.prototype.readSignature = function(next){
     console.log("Reading signature");
 
   var signature;
-  // self._clockChange(CLOCKSPEED_FUSES);
 
   self.startProgramming(function(err){
     if (!err){
@@ -83,23 +79,11 @@ ISP.prototype.readSignature = function(next){
 ISP.prototype.verifyFuses = function (fuses, mask, next) {
   // verifies only the low fuse for now
   var self = this;
-  // self._clockChange(CLOCKSPEED_FUSES);
   var queue = new Queue();
-
-  // queue.place(function verifyLock(){
-  //   self._transfer([0x58, 0x00, 0x00, 0x00], function(err, res){
-  //     if (res[3] & mask.lock) {
-  //       queue.next();
-  //     } else {
-  //       return next(new Error('Could not verify lock fuse'));
-  //     }
-  //   });
-  // });
 
   queue.place(function verifyLow(){
     self._transfer([0x50, 0x00, 0x00, 0x00], function(err, res){
       if (res[3] & mask.low) {
-        // queue.next();
         return next();
       } else {
         return next(new Error('Could not verify low fuse'));
@@ -107,43 +91,15 @@ ISP.prototype.verifyFuses = function (fuses, mask, next) {
     });
   });
 
-  // queue.place(function verifyHigh(){
-  //   self._transfer([0x58, 0x08, 0x00, 0x00], function(err, res){
-  //     if (res[3] & mask.high) {
-  //       queue.next();
-  //     } else {
-  //       return next(new Error('Could not verify high fuse'));
-  //     }
-  //   });
-  // });
-
-  // queue.place(function verifyExt(){
-  //   self._transfer([0x50, 0x08, 0x00, 0x00], function(err, res){
-  //     if (res[3] & mask.ext) {
-  //       return next();
-  //     } else {
-  //       return next(new Error('Could not verify ext fuse'));
-  //     }
-  //   });
-  // });
-
 }
 
 ISP.prototype.programFuses = function (next) {
   var self = this;
   // write only the low fuse for now
-  // self._clockChange(CLOCKSPEED_FUSES);
   var queue = new Queue();
-
-  // queue.place(function programLock(){
-  //   self._transfer([0xAC, 0xE0, 0x00, FUSES.lock], function(err, res){
-  //     queue.next();
-  //   });
-  // });
 
   queue.place(function programLow(){
     self._transfer([0xAC, 0xA0, 0x00, FUSES.low], function(err, res){
-      // queue.next();
       self.verifyFuses(FUSES, MASK, function(err){
         self.endProgramming(function(){
           if (err){
@@ -155,24 +111,6 @@ ISP.prototype.programFuses = function (next) {
       });
     });
   });
-
-  // queue.place(function programHigh(){
-  //   self._transfer([0xAC, 0xA8, 0x00, FUSES.high], function(err, res){
-  //     queue.next();
-  //   });
-  // });
-
-  // queue.place(function programExt(){
-  //   self._transfer([0xAC, 0xA4, 0x00, FUSES.ext], function(err, res){
-  //     self.verifyFuses(FUSES, MASK, function(err){
-  //       if (err){
-  //         next(err);
-  //       }else{
-  //         next();
-  //       }
-  //     });
-  //   });
-  // });
 
 }
 
@@ -226,7 +164,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr) {
 
   while (1) {
     var lineAddr;
-    if ( hexText[++hexPos] != 0x3a) {
+    if ( hexText[++hexPos] != 0x3a) { // 0x3a == ':'
       if (debug) console.log("no colon, stopping image read");
       return;
     }
@@ -245,7 +183,7 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr) {
     lineAddr = (lineAddr << 8) + hexByte;
 
     if (lineAddr >= (pageAddr + self.pageSize)){
-      console.log('line address bigger than pages', lineAddr);
+      console.log('Error: line address bigger than pages', lineAddr);
       return beginning;
     }
 
@@ -314,7 +252,7 @@ ISP.prototype.flashImage = function(pages, next){
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
       debug && console.log(i, pages[i].pageBuffer);
-      commands.push(self.queuePage(pages[i].pageBuffer, pages[i].address ));//, function(flashed){
+      commands.push(self.queuePage(pages[i].pageBuffer, pages[i].address ));
         if (i+1 < pages.length){
           queue.next();
         } else {
@@ -344,7 +282,6 @@ ISP.prototype.flashAll = function(commands, next){
 
 ISP.prototype.queuePage = function(pageBuff, pageAddr, next) {
   var self = this;
-  // self._clockChange(CLOCKSPEED_FLASH);
 
   var queue = new Queue();
   var spiQueue = [];
@@ -383,7 +320,6 @@ ISP.prototype.verifyImage = function(pages, next) {
 
 ISP.prototype.readPage = function(pageBuff, pageAddr, next) {
   var self = this;
-  // self._clockChange(CLOCKSPEED_FLASH);
 
   var queue = new Queue();
 
@@ -446,7 +382,6 @@ ISP.prototype.endProgramming = function (next) {
 
 ISP.prototype.eraseChip = function(next){
   var self = this;
-  // self._clockChange(CLOCKSPEED_FUSES);
 
   self._transfer([0xAC, 0x80, 0, 0], function (err){
     if (debug) console.log("sent erase, waiting for done signal");
