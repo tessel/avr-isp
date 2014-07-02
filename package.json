@@ -5,7 +5,7 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git@github.com:tessel/arduino-isp.git"
+    "url": "git@github.com:tessel/avr-isp.git"
   },
   "author": "Technical Machine <team@technical.io>",
   "license": "MIT",
