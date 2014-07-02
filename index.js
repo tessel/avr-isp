@@ -12,8 +12,8 @@ var CLOCKSPEED_FUSES = 125000 // Arduino's SPI_CLOCK_DIV128, 125Khz
 var debug = false;
 
 ISP = function(hardware, options){
-  this.chipSelect = hardware.digital[0].output().high();
-  this.reset = hardware.digital[1].output().high();
+  this.chipSelect = hardware.digital[0].output(true);
+  this.reset = hardware.digital[1].output(true);
   this.spi = new hardware.SPI(
     {clockSpeed:CLOCKSPEED_FUSES, mode:0
     });
@@ -21,8 +21,10 @@ ISP = function(hardware, options){
   this.success = tessel.led[0];
   this.programming = tessel.led[1];
 
-  this.pageSize = options.pageSize;
-  this.fname = options.fileName
+  if (options) {
+    this.pageSize = options.pageSize;
+    this.fname = options.fileName
+  }
 
   this.clockSpeed = CLOCKSPEED_FUSES;
 
@@ -93,6 +95,42 @@ ISP.prototype.verifyFuses = function (fuses, mask, next) {
 
 }
 
+ISP.prototype.readFuses = function(next) {
+  var self = this;
+  var queue = new Queue();
+
+  var fuses = new Buffer(4);
+
+  queue.place(function readLock(){
+    self._transfer([0x58, 0x00, 0x00, 0x00], function(err, res){
+      fuses.writeUInt8(res[3], 0);
+      queue.next();
+    });
+  });
+
+  queue.place(function readLow(){
+    self._transfer([0x50, 0x00, 0x00, 0x00], function(err, res){
+      fuses.writeUInt8(res[3], 1);
+      queue.next();
+    });
+  });
+
+  queue.place(function readHigh(){
+    self._transfer([0x58, 0x08, 0x00, 0x00], function(err, res){
+      fuses.writeUInt8(res[3], 2);
+      queue.next();
+    });
+  });
+
+  queue.place(function readExt(){
+    self._transfer([0x50, 0x08, 0x00, 0x00], function(err, res){
+      fuses.writeUInt8(res[3], 3);
+      next && next(fuses);
+    });
+  });
+
+}
+
 ISP.prototype.programFuses = function (next) {
   var self = this;
   // write only the low fuse for now
@@ -105,7 +143,7 @@ ISP.prototype.programFuses = function (next) {
           if (err){
             next(err);
           } else {
-            next();
+            next && next();
           }
         });
       });
@@ -275,7 +313,7 @@ ISP.prototype._flashAll = function(commands, next){
     });
   } else {
     self.endProgramming(function(){
-      next();
+      next && next();
     });
   }
 }
@@ -365,9 +403,9 @@ ISP.prototype.startProgramming = function (next) {
       if (debug)
         console.log("SPI response", rec);
       if (rec && rec[2] == 0x53){
-        next()
+        next && next()
       } else {
-        next(new Error('Programming confirmation not received.'));
+        next && next(new Error('Programming confirmation not received.'));
       }
     });
   },50);
@@ -376,7 +414,7 @@ ISP.prototype.startProgramming = function (next) {
 ISP.prototype.endProgramming = function (next) {
   this.reset.write(1);
   this.programming.write(0);
-  next();
+  next && next();
 }
 
 ISP.prototype.eraseChip = function(next){
@@ -385,7 +423,7 @@ ISP.prototype.eraseChip = function(next){
   self._transfer([0xAC, 0x80, 0, 0], function (err){
     if (debug) console.log("sent erase, waiting for done signal");
     self._busyWait(function(){
-      next();
+      next && next();
     });
   });
 }
