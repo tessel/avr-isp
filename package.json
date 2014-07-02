@@ -1,0 +1,21 @@
+{
+  "name": "avr-isp",
+  "version": "0.0.1",
+  "description": "Library to allow Tessel to act as an AVR In-System Programmer",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:tessel/arduino-isp.git"
+  },
+  "author": "Technical Machine <team@technical.io>",
+  "license": "MIT",
+  "readmeFilename": "README.md",
+  "keywords": [
+    "tessel",
+    "avr",
+    "isp"
+  ],
+  "dependencies": {
+    "sync-queue": "0.0.1"
+  }
+}
