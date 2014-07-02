@@ -128,7 +128,7 @@ ISP.prototype.readPagesFromHexFile = function(next){
 
       ;(function readPage(position){
         if( position.position < data.length){
-          pos = self.readImagePage(pos.position, data, pageAddr);
+          pos = self._readImagePage(pos.position, data, pageAddr);
           pages.push({ pageBuffer:pos.page, address: pageAddr});
           pageAddr+=self.pageSize;
           setImmediate(readPage(pos));
@@ -141,7 +141,7 @@ ISP.prototype.readPagesFromHexFile = function(next){
 }
 
 // returns position of page read
-ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr) {
+ISP.prototype._readImagePage = function (hexPos, hexText, pageAddr) {
   var self = this;
 
   var len;
@@ -152,8 +152,8 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr) {
   var hexByte, checksum;
 
   function nextHex(){
-    hexByte = hexToN(hexText[++hexPos]);
-    hexByte = (hexByte << 4) + hexToN(hexText[++hexPos]);
+    hexByte = _hexToN(hexText[++hexPos]);
+    hexByte = (hexByte << 4) + _hexToN(hexText[++hexPos]);
     checksum += hexByte;
   }
 
@@ -169,8 +169,8 @@ ISP.prototype.readImagePage = function (hexPos, hexText, pageAddr) {
       return;
     }
 
-    len = hexToN(hexText[++hexPos]);
-    len = (len << 4) + hexToN(hexText[++hexPos]);
+    len = _hexToN(hexText[++hexPos]);
+    len = (len << 4) + _hexToN(hexText[++hexPos]);
     checksum = len;
     debug && console.log('Len',len);
 
@@ -252,26 +252,26 @@ ISP.prototype.flashImage = function(pages, next){
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
       debug && console.log(i, pages[i].pageBuffer);
-      commands.push(self.queuePage(pages[i].pageBuffer, pages[i].address ));
+      commands.push(self._queuePage(pages[i].pageBuffer, pages[i].address ));
         if (i+1 < pages.length){
           queue.next();
         } else {
           self.startProgramming(function(){
-            self.flashAll(commands, next);
+            self._flashAll(commands, next);
           });
         }
     }.bind(this, i));
   }
 }
 
-ISP.prototype.flashAll = function(commands, next){
+ISP.prototype._flashAll = function(commands, next){
   if (debug)
     console.log('starting flash');
   var self = this;
   if (commands.length){
     self._transfer(commands[0], function(){
       commands.shift();
-      self.flashAll(commands, next);
+      self._flashAll(commands, next);
     });
   } else {
     self.endProgramming(function(){
@@ -280,7 +280,7 @@ ISP.prototype.flashAll = function(commands, next){
   }
 }
 
-ISP.prototype.queuePage = function(pageBuff, pageAddr, next) {
+ISP.prototype._queuePage = function(pageBuff, pageAddr, next) {
   var self = this;
 
   var queue = new Queue();
@@ -303,34 +303,33 @@ ISP.prototype.verifyImage = function(pages, next) {
   var self = this;
 
   var queue = new Queue();
+  self.incorrect = 0;
 
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
-      console.log(i, pages[i].pageBuffer);
-      self.readPage(pages[i].pageBuffer, pages[i].address, function(){
+      self._readPage(pages[i].pageBuffer, pages[i].address, function(){
         if (i+1 < pages.length){
           queue.next();
         } else {
-          next();
+          next(null, self.incorrect);
         }
       });
     }.bind(this, i));
   }
 }
 
-ISP.prototype.readPage = function(pageBuff, pageAddr, next) {
+ISP.prototype._readPage = function(pageBuff, pageAddr, next) {
   var self = this;
 
   var queue = new Queue();
 
   for (var i = 0; i < self.pageSize/2; i++){
     queue.place(function(i){
-      self.readWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, res){
-        self.readWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, res){
+      self._readWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, res){
+        self._readWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, res){
           if (i+1 < self.pageSize/2 ){
             queue.next();
           } else {
-            console.log('End of page reached');
             next();
           }
         });
@@ -340,14 +339,14 @@ ISP.prototype.readPage = function(pageBuff, pageAddr, next) {
 
 }
 
-ISP.prototype.readWord = function(hilo, addr, data, next) {
+ISP.prototype._readWord = function(hilo, addr, data, next) {
   var self = this;
   if (debug)
     console.log("data", data);
 
   this._transfer([0x20+8*hilo, (addr >> 8) & 0xFF, addr & 0xFF, 0x00 ], function (err, res) {
     if ( data != res[3]){
-      console.log('Error verifying data. Expected', data,', got', res[3], 'at 0x', addr.toString(16));
+      if (debug) console.log('Error verifying data. Expected', data,', got', res[3], 'at 0x', addr.toString(16));
       self.incorrect++;
       next(err, res);
     } else {
@@ -415,7 +414,7 @@ ISP.prototype._busyWait = function(next){
   });
 }
 
-function hexToN(hex) {
+function _hexToN(hex) {
   if (hex >= 0x30 && hex <= 0x39) {
     return hex - 0x30;
   }
