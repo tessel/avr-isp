@@ -37,7 +37,7 @@ function writeHexFile(next){
     if (err) {
       console.log('Parse error: ',err);
     } else {
-      console.log('Flashing chip memory');
+      console.log('Flashing chip memory...');
       isp.flashImage(pages, function(){
           console.log('Done programming!');
           next(pages);
@@ -47,7 +47,7 @@ function writeHexFile(next){
 }
 
 function verifyHexFile(pages, next){
-  console.log('Verifying flash was written properly');
+  console.log('Verifying flash was written properly - please wait as this will take a while...');
   isp.verifyImage(pages, next);
 }
 
@@ -62,11 +62,11 @@ function execute(){
 
   queue.place(function(){
     writeHexFile(function(pages){
-      // queue.place(function(){
-      //   verifyHexFile(pages, function(){
-      //   console.log('Verification complete.');
-      //   })
-      // });
+      queue.place(function(){
+        verifyHexFile(pages, function(){
+        console.log('Verification complete.');
+        })
+      });
       queue.next();
     });
   });
