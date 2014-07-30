@@ -390,6 +390,34 @@ ISP.prototype.eraseChip = function(next){
   });
 }
 
+ISP.prototype.readEEPROMByte = function(address, callback) {
+  this.accessEEPROM(0xA0, address, 0x00, callback);
+}
+
+ISP.prototype.writeEEPROMByte = function(byte, address, callback) {
+  this.accessEEPROM(0xC0, address, byte, callback); 
+}
+
+ISP.prototype.accessEEPROM = function(command, address, data, callback) {
+  var self = this;
+  var address = address & 0xFF;
+  self.startProgramming(function(err) {
+    if (err) {
+      return callback(err);
+    }
+    self._transfer([command, 0x00, address, data], function(err, response) {
+      if (err) {
+        return callback(err);
+      }
+      self.endProgramming(function(err) {
+        if (callback) {
+          callback(err, response);
+        }
+      });
+    });
+  })
+}
+
 ISP.prototype._transfer = function (arr, next){
   if (arr.length%4 != 0) {
     var err = "isp transfer called with wrong size. needs to be 4 bytes, got "+arr;
