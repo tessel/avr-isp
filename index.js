@@ -477,26 +477,47 @@ ISP.prototype.writeEEPROM = function(byteArr, startAddress, callback) {
 }
 
 ISP.prototype.readEEPROMByte = function(address, callback) {
+  // Read a single byte from the specified adddress
   this.accessEEPROMByte(0xA0, address, 0x00, callback);
 }
 
 ISP.prototype.writeEEPROMByte = function(byte, address, callback) {
+  // Write the specified byte at the specified address
   this.accessEEPROMByte(0xC0, address, byte, callback); 
 }
 
 ISP.prototype.accessEEPROMByte = function(command, address, data, callback) {
   var self = this;
-  var address = address & 0xFF;
+
+  // Start the programming sequence
   self.startProgramming(function(err) {
+    // If there was an issue
     if (err) {
-      return callback(err);
-    }
-    self._transfer([command, 0x00, address, data], function(err, response) {
-      if (err) {
-        return callback(err);
+      // And a callback
+      if (callback) {
+        // Call the callback
+        callback(err);
       }
-      self.endProgramming(function(err) {
+      // Abort
+      return 
+    }
+    // Make the transfer
+    self._transfer([command, 0x00, address, data], function(err, response) {
+      // If there was an error
+      if (err) {
+        // And a callback
         if (callback) {
+          // Call the callback
+          callback(err);
+        }
+        // Abort
+        return
+      }
+      // End the programming
+      self.endProgramming(function(err) {
+        // If a callback was provided
+        if (callback) {
+          // Call the callback with the data byte
           callback(err, response && response[3]);
         }
       });
