@@ -1,8 +1,12 @@
 {
   "name": "avr-isp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Library to allow Tessel to act as an AVR In-System Programmer",
   "main": "index.js",
+
+  "scripts": {
+    "test": "tinytap -e 'tessel run {} ${ATTINY_PORT}' test/*.js"
+  },
   "repository": {
     "type": "git",
     "url": "git@github.com:tessel/avr-isp.git"
@@ -15,7 +19,15 @@
     "avr",
     "isp"
   ],
+  "devDependencies": {
+    "async": "^0.9.0",
+    "tinytap" : "~0.2.0"
+  },
   "dependencies": {
+    "async": "^0.9.0",
     "sync-queue": "0.0.1"
+  },
+  "hardware" : {
+    "test" : false
   }
 }
