@@ -6,7 +6,7 @@ var port = 'A' || process.argv[2];
 var isp;
 console.log('port', port);
 
-test.count(4);
+test.count(11);
 
 async.series([
 
@@ -29,21 +29,21 @@ async.series([
     });
   }),
 
-  // test('can read multiple bytes', function(t) {
-  //   var testBytes = [0x07, 0x27, 0x19, 0x91];
-  //   var startAddress = 0xA0;
-  //   isp.writeEEPROM(testBytes, startAddress, function(err, response) {
-  //     t.equal(err, undefined, 'error writing multiple bytes');
-  //     isp.readEEPROM(testBytes.length, startAddress, function(err, response) {
-  //       t.equal(err, undefined, 'error retrieving byte');
-  //       t.equal(4, response.length, 'invalid return length');
-  //       for (int i = 0; i < testBytes.length; i++) {
-
-  //       }
-  //       t.end();
-  //     });
-  //   });
-  // }),
+  test('can read multiple bytes', function(t) {
+    var testBytes = [0x07, 0x27, 0x19, 0x91];
+    var startAddress = 0xA0;
+    isp.writeEEPROM(testBytes, startAddress, function(err, response) {
+      t.equal(err, undefined, 'error writing multiple bytes');
+      isp.readEEPROM(testBytes.length, startAddress, function(err, readBytes) {
+        t.equal(err, undefined, 'error retrieving byte');
+        t.equal(testBytes.length, readBytes.length, 'invalid return length');
+        for (var i = 0; i < testBytes.length; i++) {
+          t.equal(testBytes[i], readBytes[i], 'what was written is not what was read back');
+        }
+        t.end();
+      });
+    });
+  }),
 
   ],
   function(err) {

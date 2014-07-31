@@ -391,22 +391,94 @@ ISP.prototype.eraseChip = function(next){
 }
 
 ISP.prototype.readEEPROM = function(numBytes, startAddress, callback) {
-  
+  // Allocate a buffer for the response
+  var bytes = new Buffer(numBytes);
+  // Create a queue for reach byte ready transaction
+  var queue = new Queue();
+  // For each byte
+  for (var i = 0; i < numBytes; i++){
+    // Place a transaction on the queue
+    queue.place(function(i){
+      // The transaction consists of reading a byte at the specific offeset
+      this.readEEPROMByte(startAddress + i, function(err, byte){
+        // If there was an error
+        if (err) {
+          // And a callback
+          if (callback) {
+            // Call the callback with the error
+            callback(err);
+            // Abort
+            return;
+          }
+          
+        }
+        // If everything is hunky dory
+        else {
+          // Save the received byte into our return buffer
+          bytes[i] = byte;
+
+          // If this is the last byte
+          if (i == numBytes-1) {
+            // Return our successfully read bytes
+            callback(null, bytes);
+          }
+          // If not
+          else {
+            // Make the next read
+            queue.next();
+          }
+        }
+      });
+    }.bind(this, i));
+  }
 }
 
 ISP.prototype.writeEEPROM = function(byteArr, startAddress, callback) {
-  
+  // Create a queue of write transactions
+  var queue = new Queue();
+  // Iterate through the bytes to write
+  for (var i = 0; i < byteArr.length; i++){
+    // Place each write transaction into the queue
+    queue.place(function(i, byteArr){
+      // Write the byte at the specific offset
+      this.writeEEPROMByte(byteArr[i], startAddress + i, function(err, byte){
+        // If there was an error
+        if (err) {
+          // And a callback was provided
+          if (callback) {
+            // Call the callback with the error
+            callback(err);
+          }
+          // Abort
+          return;
+        }
+        // If everything is still running smoothly
+        else {
+          // If this is the last byte
+          if (i == byteArr.length-1) {
+            // call the callback
+            callback(null);
+          }
+          // If not
+          else {
+            // Make the next write
+            queue.next();
+          }
+        }
+      });
+    }.bind(this, i, byteArr));
+  }
 }
 
 ISP.prototype.readEEPROMByte = function(address, callback) {
-  this.accessEEPROM(0xA0, address, 0x00, callback);
+  this.accessEEPROMByte(0xA0, address, 0x00, callback);
 }
 
 ISP.prototype.writeEEPROMByte = function(byte, address, callback) {
-  this.accessEEPROM(0xC0, address, byte, callback); 
+  this.accessEEPROMByte(0xC0, address, byte, callback); 
 }
 
-ISP.prototype.accessEEPROM = function(command, address, data, callback) {
+ISP.prototype.accessEEPROMByte = function(command, address, data, callback) {
   var self = this;
   var address = address & 0xFF;
   self.startProgramming(function(err) {
