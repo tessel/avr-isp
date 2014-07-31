@@ -4,8 +4,9 @@ var tessel = require('tessel');
 var async = require('async');
 var port = 'A' || process.argv[2];
 var isp;
+console.log('port', port);
 
-test.count(5);
+test.count(4);
 
 async.series([
 
