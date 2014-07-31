@@ -21,6 +21,7 @@ ISP = function(hardware, options){
   this.success = tessel.led[0];
   this.programming = tessel.led[1];
 
+  options = options || {};
   this.pageSize = options.pageSize;
   this.fname = options.fileName
 
