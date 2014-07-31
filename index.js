@@ -419,8 +419,11 @@ ISP.prototype.readEEPROM = function(numBytes, startAddress, callback) {
 
           // If this is the last byte
           if (i == numBytes-1) {
-            // Return our successfully read bytes
-            callback(null, bytes);
+            // If a callback was provided
+            if (callback) {
+              // call the callback with read bytes
+              callback(null, bytes);
+            }
           }
           // If not
           else {
@@ -439,7 +442,7 @@ ISP.prototype.writeEEPROM = function(byteArr, startAddress, callback) {
   // Iterate through the bytes to write
   for (var i = 0; i < byteArr.length; i++){
     // Place each write transaction into the queue
-    queue.place(function(i, byteArr){
+    queue.place(function(i){
       // Write the byte at the specific offset
       this.writeEEPROMByte(byteArr[i], startAddress + i, function(err, byte){
         // If there was an error
@@ -456,8 +459,11 @@ ISP.prototype.writeEEPROM = function(byteArr, startAddress, callback) {
         else {
           // If this is the last byte
           if (i == byteArr.length-1) {
-            // call the callback
-            callback(null);
+            // If a callback was provided
+            if (callback) {
+              // call the callback
+              callback(null);
+            }   
           }
           // If not
           else {
@@ -466,7 +472,7 @@ ISP.prototype.writeEEPROM = function(byteArr, startAddress, callback) {
           }
         }
       });
-    }.bind(this, i, byteArr));
+    }.bind(this, i));
   }
 }
 
