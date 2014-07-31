@@ -390,6 +390,14 @@ ISP.prototype.eraseChip = function(next){
   });
 }
 
+ISP.prototype.readEEPROM = function(numBytes, startAddress, callback) {
+  
+}
+
+ISP.prototype.writeEEPROM = function(byteArr, startAddress, callback) {
+  
+}
+
 ISP.prototype.readEEPROMByte = function(address, callback) {
   this.accessEEPROM(0xA0, address, 0x00, callback);
 }
@@ -411,7 +419,7 @@ ISP.prototype.accessEEPROM = function(command, address, data, callback) {
       }
       self.endProgramming(function(err) {
         if (callback) {
-          callback(err, response);
+          callback(err, response && response[3]);
         }
       });
     });
