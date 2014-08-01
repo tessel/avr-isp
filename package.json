@@ -1,6 +1,6 @@
 {
   "name": "avr-isp",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Library to allow Tessel to act as an AVR In-System Programmer",
   "main": "index.js",
 

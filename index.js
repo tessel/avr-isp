@@ -21,8 +21,9 @@ ISP = function(hardware, options){
   this.success = tessel.led[0];
   this.programming = tessel.led[1];
 
-  this.pageSize = options.pageSize;
-  this.fname = options.fileName
+  options = options || {};
+  this.pageSize = options.pageSize || 64;
+  this.fname = options.fileName || './attx4.hex'
 
   this.clockSpeed = CLOCKSPEED_FUSES;
 
