@@ -132,7 +132,9 @@ ISP.prototype.readPagesFromHexFile = function(next){
           pos = self._readImagePage(pos.position, data, pageAddr);
           pages.push({ pageBuffer:pos.page, address: pageAddr});
           pageAddr+=self.pageSize;
-          setImmediate(readPage(pos));
+          setImmediate(function() {
+            readPage(pos);
+          });
         } else {
           next(null, pages);
         }
