@@ -272,7 +272,7 @@ ISP.prototype._flashAll = function(commands, next){
     console.log('starting flash');
   var self = this;
   if (commands.length){
-    self._transfer(commands[0], function(){
+    this.spi.send(new Buffer(commands[0]), function(err, res){
       commands.shift();
       self._flashAll(commands, next);
     });
