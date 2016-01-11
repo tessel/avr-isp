@@ -310,7 +310,7 @@ ISP.prototype.verifyImage = function(pages, next) {
 
   for (var i=0; i<pages.length; i++){
     queue.place(function(i){
-      self._readPage(pages[i].pageBuffer, pages[i].address, function(){
+      self._verifyPage(pages[i].pageBuffer, pages[i].address, function(){
         if (i+1 < pages.length){
           queue.next();
         } else {
@@ -321,15 +321,15 @@ ISP.prototype.verifyImage = function(pages, next) {
   }
 }
 
-ISP.prototype._readPage = function(pageBuff, pageAddr, next) {
+ISP.prototype._verifyPage = function(pageBuff, pageAddr, next) {
   var self = this;
 
   var queue = new Queue();
 
   for (var i = 0; i < self.pageSize/2; i++){
     queue.place(function(i){
-      self._readWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, res){
-        self._readWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, res){
+      self._verifyWord(LOW, i+pageAddr/2, pageBuff[2*i], function(err, res){
+        self._verifyWord(HIGH, i+pageAddr/2, pageBuff[2*i+1], function(err, res){
           if (i+1 < self.pageSize/2 ){
             queue.next();
           } else {
@@ -342,7 +342,7 @@ ISP.prototype._readPage = function(pageBuff, pageAddr, next) {
 
 }
 
-ISP.prototype._readWord = function(hilo, addr, data, next) {
+ISP.prototype._verifyWord = function(hilo, addr, data, next) {
   var self = this;
   if (debug)
     console.log("data", data);
@@ -354,6 +354,82 @@ ISP.prototype._readWord = function(hilo, addr, data, next) {
       next(err, res);
     } else {
       next(err, res);
+    }
+  });
+}
+
+ISP.prototype.readImage = function( numPages, next) {
+  var self = this;
+  var queue = new Queue();
+
+  var pages = [];
+  var pageAddr = 0x00;
+
+  debug && console.log('Reading', numPages, 'pages of program flash');
+
+  for (var i=0; i<numPages; i++){
+    queue.place(function(i){
+      self._readPage( pageAddr, function(err, page){
+        if (!err){
+          pages.push(page);
+          pageAddr+=self.pageSize;
+          if (i < numPages-1) {
+            queue.next();
+          } else {
+            next(null, pages);
+          }
+        } else {
+          next(err);
+        }
+      });
+    }.bind(this, i));
+  }
+}
+
+ISP.prototype._readPage = function( pageAddr, next) {
+  var self = this;
+
+  var queue = new Queue();
+
+  var page = new Buffer(self.pageSize);
+
+
+  debug && console.log('Reading page', pageAddr);
+
+  for (var i = 0; i < self.pageSize/2; i++){
+    queue.place(function(i){
+      self._readWord(LOW, i+pageAddr/2, function(err, res){
+        if (!err){
+          page.writeUInt8(res, 2*i);
+          self._readWord(HIGH, i+pageAddr/2, function(err, res){
+            if (!err){
+              page.writeUInt8(res, (2*i)+1);
+              if (i+1 < self.pageSize/2 ){
+                queue.next();
+              } else {
+                next(null, page);
+              }
+            } else {
+              next(err)
+            }
+          });
+        } else {
+          next(err);
+        }
+      });
+    }.bind(this, i));
+  }
+
+}
+
+ISP.prototype._readWord = function(hilo, addr, next) {
+  var self = this;
+
+  self._transfer([0x20+8*hilo, (addr >> 8) & 0xFF, addr & 0xFF, 0x00 ], function (err, res) {
+    if (!err){
+      next(null, res[3]);
+    } else {
+      next(err);
     }
   });
 }
